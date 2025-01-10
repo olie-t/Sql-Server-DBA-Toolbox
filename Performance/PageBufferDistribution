@@ -1,0 +1,25 @@
+#Check for what objects are exerting the most presssure on the page buffer
+SELECT 
+    OBJECT_NAME(p.object_id) AS ObjectName,
+    o.type_desc AS ObjectType,
+    COUNT(*) * 8 / 1024.0 AS BufferSizeMB,
+    COUNT(*) AS BufferCount,
+    p.index_id AS IndexID,
+    i.name AS IndexName,
+    COUNT(*) * 100.0 / (SELECT COUNT(*) 
+        FROM sys.dm_os_buffer_descriptors d2 
+        WHERE d2.database_id = db_id()) AS BufferPercentage
+FROM sys.dm_os_buffer_descriptors d
+INNER JOIN sys.allocation_units a 
+    ON d.allocation_unit_id = a.allocation_unit_id
+INNER JOIN sys.partitions p 
+    ON a.container_id = p.hobt_id
+INNER JOIN sys.objects o 
+    ON p.object_id = o.object_id
+LEFT JOIN sys.indexes i 
+    ON p.object_id = i.object_id 
+    AND p.index_id = i.index_id
+WHERE d.database_id = db_id()
+    AND o.is_ms_shipped = 0
+GROUP BY p.object_id, o.type_desc, p.index_id, i.name
+ORDER BY BufferCount DESC;
